@@ -1,67 +1,69 @@
-# agentic-pipeline
+# Agentic Pipeline (Quarkus + LangChain4j)
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+Proof of concept for the pipeline pattern applied to LLM agents. A REST endpoint orchestrates three specialized agents (planner → writer → critic) to deliver a structured answer with explicit feedback.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+## Prerequisites
+- JDK 21+
+- Maven (wrapper `./mvnw` included)
+- Ollama running locally at `http://localhost:11434` with the model in `src/main/resources/application.properties` (`qwen3:1.7b` by default)
 
-## Running the application in dev mode
+## How it works (architecture)
+- API: `POST /pipeline` accepts a `goal`, `audience`, and `constraints`.
+- Agents:
+  - `PlannerAi`: builds a structured JSON plan (intent, assumptions, steps, risks).
+  - `WriterAi`: executes the plan to produce a draft answer with headings/bullets.
+  - `CriticAi`: reviews the draft, returns issues, improvements, and `finalAnswer`.
+- Pipeline: `PipelineResource` composes the agents in sequence and returns `{ plan, draft, critique }`, demonstrating a linear agentic pipeline.
 
-You can run your application in dev mode that enables live coding using:
-
-```shell script
+## Running locally
+```bash
 ./mvnw quarkus:dev
 ```
+Quarkus Dev UI is available at `http://localhost:8080/q/dev` (dev mode only).
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+## Example request
+```bash
+curl -X POST http://localhost:8080/pipeline \
+  -H "Content-Type: application/json" \
+  -d '{
+    "goal": "Draft a rollout plan for adding feature flags",
+    "audience": "platform engineers",
+    "constraints": "use existing CI/CD, rollout within 2 weeks"
+  }'
+```
+Example shape of the response:
+```json
+{
+  "plan": { "intent": "...", "assumptions": [], "steps": [], "risks": [] },
+  "draft": "raw draft from writer",
+  "critique": {
+    "issues": ["..."],
+    "improvements": ["..."],
+    "finalAnswer": "improved output"
+  }
+}
+```
 
-## Packaging and running the application
+## Configuration
+- Ollama settings and model: `src/main/resources/application.properties`
+  - `quarkus.langchain4j.ollama.base-url=http://localhost:11434`
+  - `quarkus.langchain4j.ollama.chat-model.model-id=qwen3:1.7b`
+- Adjust temperature/format/logging in the same file as needed.
 
-The application can be packaged using:
-
-```shell script
+## Packaging
+```bash
+# JVM runnable jar
 ./mvnw package
-```
+java -jar target/quarkus-app/quarkus-run.jar
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
-
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
-
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
+# Uber-jar
 ./mvnw package -Dquarkus.package.jar.type=uber-jar
+java -jar target/*-runner.jar
 ```
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
-
-## Creating a native executable
-
-You can create a native executable using:
-
-```shell script
+Native build (optional, requires GraalVM or container build):
+```bash
 ./mvnw package -Dnative
-```
-
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
-
-```shell script
+# or
 ./mvnw package -Dnative -Dquarkus.native.container-build=true
 ```
-
-You can then execute your native executable with: `./target/agentic-pipeline-1.0.0-SNAPSHOT-runner`
-
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
-
-## Related Guides
-
-- ArC ([guide](https://quarkus.io/guides/cdi-reference)): Build time CDI dependency injection
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
-
-## Provided Code
-
-### REST
-
-Easily start your REST Web Services
-
-[Related guide section...](https://quarkus.io/guides/getting-started-reactive#reactive-jax-rs-resources)
